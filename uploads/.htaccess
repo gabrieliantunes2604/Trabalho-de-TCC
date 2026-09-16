@@ -1,0 +1,10 @@
+# ==============================================================================
+# SEGURANÇA OWASP: BLOQUEIO DE EXECUÇÃO DE SCRIPTS NA PASTA DE UPLOADS
+# Impede a execução direta de arquivos .php, .phtml, .cgi, etc.
+# ==============================================================================
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|phar|inc|cgi|pl|sh)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+Options -ExecCGI -Indexes
