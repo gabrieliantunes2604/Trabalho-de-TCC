@@ -1,8 +1,13 @@
 <?php
-$servidor = "localhost";
-$usuario = "root";
-$senha = "";
-$banco = "engcursos_db";
+if (class_exists('Dotenv\Dotenv')) {
+    $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+    $dotenv->load();
+}
+
+$servidor = $_ENV['DB_HOST'];
+$usuario = $_ENV['DB_USER'];
+$senha = $_ENV['DB_PASS'] ;
+$banco = $_ENV['DB_NAME'];
 
 try {
     // Cria a conexão PDO
