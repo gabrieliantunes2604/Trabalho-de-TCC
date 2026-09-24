@@ -171,7 +171,7 @@ $ebooks = $stmtEbooks->fetchAll(PDO::FETCH_ASSOC);
                         <div class="col-md-6 col-lg-4">
                             <div class="card card-produto h-100 position-relative d-flex flex-column"
                                 style="border-top: 4px solid #4318FF;">
-                                <img src="<?php echo $imagem_curso; ?>" class="card-img-top" alt="Capa do curso">
+                                <img src="<?php echo (strpos($imagem_curso, 'http') === 0) ?$imagem_curso : str_replace('../', '', $imagem_curso); ?>" class="card-img-top" alt="Capa do curso">
                                 <div class="p-4 d-flex flex-column flex-grow-1">
                                     <h4 class="fw-bold text-dark mb-3"><?php echo htmlspecialchars($curso['titulo']); ?></h4>
                                     <p class="text-muted flex-grow-1 small">

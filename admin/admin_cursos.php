@@ -2,6 +2,11 @@
 session_start();
 require '../includes/conexao.php';
 
+// Ativa a exibição de erros do PHP para ajudar no depuramento local se algo falhar
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Verifica se está logado
 if (!isset($_SESSION['admin_logado']) || $_SESSION['admin_logado'] !== true) {
     header("Location: ../auth/login.php");
@@ -9,24 +14,21 @@ if (!isset($_SESSION['admin_logado']) || $_SESSION['admin_logado'] !== true) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $titulo = $_POST['titulo'];
-    $descricao = $_POST['descricao'];
-    $video_url = $_POST['video_url'];
-
-    // Captura o tipo de aula
+    $titulo = $_POST['titulo'] ?? '';
+    $descricao = $_POST['descricao'] ?? '';
+    $video_url = $_POST['video_url'] ?? '';
     $tipo_aula = $_POST['tipo_aula'] ?? 'video';
 
-    // Tratamento das checkbox de vitrine
     $destaque = isset($_POST['destaque']) ? 1 : 0;
     $promocao = isset($_POST['promocao']) ? 1 : 0;
 
-    // Tratamento de Valores Corrigido (Remove ponto de milhar e troca vírgula por ponto)
+    // Tratamento de Valores
     $preco = !empty($_POST['preco']) ? str_replace(',', '.', str_replace('.', '', $_POST['preco'])) : 0;
     $preco_antigo = !empty($_POST['preco_antigo']) ? str_replace(',', '.', str_replace('.', '', $_POST['preco_antigo'])) : null;
 
     $id = !empty($_POST['id']) ? $_POST['id'] : null;
 
-    // Se estiver editando, busca os dados atuais para poder apagar os arquivos antigos se forem substituídos
+    // Se estiver editando, busca os dados atuais
     $curso_atual = null;
     if ($id) {
         $stmt_atual = $conn->prepare("SELECT imagem, arquivo_pdf, arquivo_planilha FROM cursos WHERE id = :id");
@@ -36,67 +38,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     // Upload da IMAGEM
-    $caminho_imagem = "";
-    $nova_img_enviada = false;
+    $caminho_imagem = $curso_atual['imagem'] ?? '';
     if (isset($_FILES['imagem']) && $_FILES['imagem']['error'] === UPLOAD_ERR_OK) {
         $pasta_img = "../uploads/";
-        if (!is_dir($pasta_img))
-            mkdir($pasta_img, 0777, true);
+        if (!is_dir($pasta_img)) mkdir($pasta_img, 0777, true);
         $ext = strtolower(pathinfo($_FILES['imagem']['name'], PATHINFO_EXTENSION));
         $novo_nome_img = "curso_" . uniqid() . "." . $ext;
         if (move_uploaded_file($_FILES['imagem']['tmp_name'], $pasta_img . $novo_nome_img)) {
             $caminho_imagem = $pasta_img . $novo_nome_img;
-            $nova_img_enviada = true;
-
-            // Remove a imagem antiga se existir ao editar
             if ($curso_atual && !empty($curso_atual['imagem']) && file_exists($curso_atual['imagem'])) {
-                unlink($curso_atual['imagem']);
+                @unlink($curso_atual['imagem']);
             }
         }
     }
 
-    // Upload do PDF (Material de Apoio)
-    $caminho_pdf = "";
-    $novo_pdf_enviado = false;
+    // Upload do PDF
+    $caminho_pdf = $curso_atual['arquivo_pdf'] ?? '';
     if (isset($_FILES['arquivo_pdf']) && $_FILES['arquivo_pdf']['error'] === UPLOAD_ERR_OK) {
         $pasta_pdf = "../uploads/pdfs/";
-        if (!is_dir($pasta_pdf))
-            mkdir($pasta_pdf, 0777, true);
+        if (!is_dir($pasta_pdf)) mkdir($pasta_pdf, 0777, true);
         $ext_pdf = strtolower(pathinfo($_FILES['arquivo_pdf']['name'], PATHINFO_EXTENSION));
-
-        if ($ext_pdf === 'pdf') { // Garante que é apenas PDF
+        if ($ext_pdf === 'pdf') {
             $novo_nome_pdf = "material_" . uniqid() . ".pdf";
             if (move_uploaded_file($_FILES['arquivo_pdf']['tmp_name'], $pasta_pdf . $novo_nome_pdf)) {
                 $caminho_pdf = $pasta_pdf . $novo_nome_pdf;
-                $novo_pdf_enviado = true;
-
-                // Remove o PDF antigo se existir ao editar
                 if ($curso_atual && !empty($curso_atual['arquivo_pdf']) && file_exists($curso_atual['arquivo_pdf'])) {
-                    unlink($curso_atual['arquivo_pdf']);
+                    @unlink($curso_atual['arquivo_pdf']);
                 }
             }
         }
     }
 
-    // Upload da Planilha (Material de Apoio)
-    $caminho_planilha = "";
-    $nova_planilha_enviada = false;
+    // Upload da Planilha
+    $caminho_planilha = $curso_atual['arquivo_planilha'] ?? '';
     if (isset($_FILES['arquivo_planilha']) && $_FILES['arquivo_planilha']['error'] === UPLOAD_ERR_OK) {
         $pasta_planilha = "../uploads/planilhas/";
-        if (!is_dir($pasta_planilha))
-            mkdir($pasta_planilha, 0777, true);
+        if (!is_dir($pasta_planilha)) mkdir($pasta_planilha, 0777, true);
         $ext_planilha = strtolower(pathinfo($_FILES['arquivo_planilha']['name'], PATHINFO_EXTENSION));
-
-        // Verifica se é excel
         if (in_array($ext_planilha, ['xls', 'xlsx'])) {
             $novo_nome_planilha = "planilha_" . uniqid() . "." . $ext_planilha;
             if (move_uploaded_file($_FILES['arquivo_planilha']['tmp_name'], $pasta_planilha . $novo_nome_planilha)) {
                 $caminho_planilha = $pasta_planilha . $novo_nome_planilha;
-                $nova_planilha_enviada = true;
-
-                // Remove a planilha antiga se existir ao editar
                 if ($curso_atual && !empty($curso_atual['arquivo_planilha']) && file_exists($curso_atual['arquivo_planilha'])) {
-                    unlink($curso_atual['arquivo_planilha']);
+                    @unlink($curso_atual['arquivo_planilha']);
                 }
             }
         }
@@ -104,35 +88,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Operação no Banco (Insert ou Update)
     if ($id) {
-        // Monta a query dinâmica para UPDATE
-        $sql = "UPDATE cursos SET titulo = :titulo, descricao = :descricao, preco = :preco, preco_antigo = :preco_antigo, destaque = :destaque, promocao = :promocao, video_url = :video_url, tipo_aula = :tipo_aula";
-
-        if ($nova_img_enviada)
-            $sql .= ", imagem = :imagem";
-        if ($novo_pdf_enviado)
-            $sql .= ", arquivo_pdf = :arquivo_pdf";
-        if ($nova_planilha_enviada)
-            $sql .= ", arquivo_planilha = :arquivo_planilha";
-
-        $sql .= " WHERE id = :id";
-
+        $sql = "UPDATE cursos SET 
+                    titulo = :titulo, 
+                    descricao = :descricao, 
+                    preco = :preco, 
+                    preco_antigo = :preco_antigo, 
+                    destaque = :destaque, 
+                    promocao = :promocao, 
+                    video_url = :video_url, 
+                    tipo_aula = :tipo_aula,
+                    imagem = :imagem,
+                    arquivo_pdf = :arquivo_pdf,
+                    arquivo_planilha = :arquivo_planilha
+                WHERE id = :id";
+        
         $stmt = $conn->prepare($sql);
         $stmt->bindParam(':id', $id);
-        if ($nova_img_enviada)
-            $stmt->bindParam(':imagem', $caminho_imagem);
-        if ($novo_pdf_enviado)
-            $stmt->bindParam(':arquivo_pdf', $caminho_pdf);
-        if ($nova_planilha_enviada)
-            $stmt->bindParam(':arquivo_planilha', $caminho_planilha);
-
     } else {
-        // INSERT
         $sql = "INSERT INTO cursos (titulo, descricao, preco, preco_antigo, destaque, promocao, imagem, video_url, arquivo_pdf, tipo_aula, arquivo_planilha) 
                 VALUES (:titulo, :descricao, :preco, :preco_antigo, :destaque, :promocao, :imagem, :video_url, :arquivo_pdf, :tipo_aula, :arquivo_planilha)";
         $stmt = $conn->prepare($sql);
-        $stmt->bindParam(':imagem', $caminho_imagem);
-        $stmt->bindParam(':arquivo_pdf', $caminho_pdf);
-        $stmt->bindParam(':arquivo_planilha', $caminho_planilha);
     }
 
     $stmt->bindParam(':titulo', $titulo);
@@ -143,32 +118,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $stmt->bindParam(':promocao', $promocao);
     $stmt->bindParam(':video_url', $video_url);
     $stmt->bindParam(':tipo_aula', $tipo_aula);
+    $stmt->bindParam(':imagem', $caminho_imagem);
+    $stmt->bindParam(':arquivo_pdf', $caminho_pdf);
+    $stmt->bindParam(':arquivo_planilha', $caminho_planilha);
+
     $stmt->execute();
 
     header("Location: admin_cursos.php");
     exit;
 }
 
-// Lógica de exclusão com remoção de arquivos
+// Lógica de exclusão
 if (isset($_GET['deletar'])) {
     $id = $_GET['deletar'];
 
-    // Busca os caminhos dos arquivos antes de excluir a linha do banco
     $stmt = $conn->prepare("SELECT imagem, arquivo_pdf, arquivo_planilha FROM cursos WHERE id = :id");
     $stmt->bindParam(':id', $id);
     $stmt->execute();
     $curso = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($curso) {
-        if (!empty($curso['imagem']) && file_exists($curso['imagem'])) {
-            unlink($curso['imagem']);
-        }
-        if (!empty($curso['arquivo_pdf']) && file_exists($curso['arquivo_pdf'])) {
-            unlink($curso['arquivo_pdf']);
-        }
-        if (!empty($curso['arquivo_planilha']) && file_exists($curso['arquivo_planilha'])) {
-            unlink($curso['arquivo_planilha']);
-        }
+        if (!empty($curso['imagem']) && file_exists($curso['imagem'])) @unlink($curso['imagem']);
+        if (!empty($curso['arquivo_pdf']) && file_exists($curso['arquivo_pdf'])) @unlink($curso['arquivo_pdf']);
+        if (!empty($curso['arquivo_planilha']) && file_exists($curso['arquivo_planilha'])) @unlink($curso['arquivo_planilha']);
 
         $stmt = $conn->prepare("DELETE FROM cursos WHERE id = :id");
         $stmt->bindParam(':id', $id);
@@ -179,10 +151,10 @@ if (isset($_GET['deletar'])) {
     exit;
 }
 
-// Busca todos os cursos para listar na tabela
+// Busca todos os cursos
 $cursos = $conn->query("SELECT * FROM cursos ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-// Busca os dados de um curso específico se clicar em Editar
+// Busca dados para edição
 $curso_edit = null;
 if (isset($_GET['editar'])) {
     $id = $_GET['editar'];
@@ -226,7 +198,6 @@ if (isset($_GET['editar'])) {
             min-height: 100vh;
         }
 
-        /* Sidebar Fixa */
         .sidebar {
             width: var(--sidebar-width);
             min-width: var(--sidebar-width);
@@ -307,15 +278,9 @@ if (isset($_GET['editar'])) {
             font-size: 0.9rem;
         }
 
-        .link-ver-site {
-            color: #ffb800 !important;
-        }
+        .link-ver-site { color: #ffb800 !important; }
+        .link-sair { color: #ee5d50 !important; }
 
-        .link-sair {
-            color: #ee5d50 !important;
-        }
-
-        /* Área Principal */
         .main-content {
             margin-left: var(--sidebar-width);
             width: calc(100% - var(--sidebar-width));
@@ -329,19 +294,12 @@ if (isset($_GET['editar'])) {
             background: #fff;
             margin-bottom: 24px;
         }
-
-        footer,
-        .footer {
-            margin-left: 250px;
-            width: calc(100% - 250px);
-        }
     </style>
 </head>
 
 <body>
 
     <div class="wrapper">
-        <!-- Barra Lateral (Sidebar) -->
         <aside class="sidebar">
             <div>
                 <div class="sidebar-brand">
@@ -363,7 +321,6 @@ if (isset($_GET['editar'])) {
             </div>
         </aside>
 
-        <!-- Conteúdo Principal -->
         <div class="main-content">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
@@ -373,7 +330,6 @@ if (isset($_GET['editar'])) {
                 <a href="admin.php" class="btn btn-outline-secondary bg-white shadow-sm fw-semibold">⬅ Voltar ao Dashboard</a>
             </div>
 
-            <!-- Formulário -->
             <div class="card card-custom p-4">
                 <h5 class="fw-bold mb-3"><?php echo $curso_edit ? 'Editar Curso' : 'Cadastrar Novo Curso'; ?></h5>
                 <form action="admin_cursos.php" method="POST" enctype="multipart/form-data">
@@ -414,7 +370,6 @@ if (isset($_GET['editar'])) {
                                 required><?php echo $curso_edit ? htmlspecialchars($curso_edit['descricao']) : ''; ?></textarea>
                         </div>
 
-                        <!-- Campos de Mídia -->
                         <div class="col-12 mt-4 mb-2">
                             <h6 class="fw-bold border-bottom pb-2">Conteúdos & Arquivos Base</h6>
                         </div>
@@ -453,7 +408,6 @@ if (isset($_GET['editar'])) {
                             <input type="file" name="imagem" class="form-control" accept="image/*">
                         </div>
 
-                        <!-- Vitrine -->
                         <div class="col-12 mt-3">
                             <label class="form-label fw-semibold d-block">Opções de Vitrine</label>
                             <div class="form-check form-check-inline">
@@ -479,7 +433,6 @@ if (isset($_GET['editar'])) {
                 </form>
             </div>
 
-            <!-- Tabela de Cursos -->
             <div class="card card-custom p-4 mt-4">
                 <h5 class="fw-bold mb-4">Cursos Cadastrados</h5>
                 <div class="table-responsive">
@@ -575,10 +528,14 @@ if (isset($_GET['editar'])) {
                 });
             });
         });
+
+        <?php 
+    if (file_exists(__DIR__ . '/../includes/footer.php')) {
+        include __DIR__ . '/../includes/footer.php'; 
+    }
+    ?>
+    
     </script>
-
-    <?php include '../includes/footer.php'; ?>
-
 </body>
 
 </html>
