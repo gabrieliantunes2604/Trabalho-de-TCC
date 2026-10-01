@@ -25,7 +25,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $aluno = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($aluno && senhaConfere($senha, $aluno['senha'] ?? '', $aluno['data_nascimento'] ?? null)) {
+                session_regenerate_id(true); // Novo ID após autenticação
                 $_SESSION['aluno_id'] = $aluno['id'];
+                $_SESSION['aluno_id'] = (int)$aluno['id'];
                 $_SESSION['aluno_nome'] = $aluno['nome'];
                 $_SESSION['aluno_email'] = $aluno['email'];
 

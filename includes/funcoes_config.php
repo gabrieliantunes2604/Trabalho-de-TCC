@@ -141,7 +141,20 @@ function uploadSeguro($fileArray, $pastaDestino = 'uploads/', $tipoCategoria = '
     $novoNome = $tipoCategoria . '_' . bin2hex(random_bytes(12)) . '.' . $extensao;
     $caminhoFinal = rtrim($pastaDestino, '/') . '/' . $novoNome;
 
-    if (move_uploaded_file($tmpName, $caminhoFinal)) {
+    $movido = false;
+    if (php_sapi_name() === 'cli') {
+        $movido = @rename($tmpName, $caminhoFinal);
+        if (!$movido && file_exists($tmpName)) {
+            $movido = @copy($tmpName, $caminhoFinal);
+            if ($movido) {
+                @unlink($tmpName);
+            }
+        }
+    } else {
+        $movido = move_uploaded_file($tmpName, $caminhoFinal);
+    }
+
+    if ($movido) {
         return ['sucesso' => true, 'caminho' => $caminhoFinal, 'erro' => ''];
     }
 
@@ -169,14 +182,18 @@ function pinNascimento($data)
 function senhaConfere($senhaDigitada, $hash, $dataNascimento = null)
 {
     $senhaDigitada = trim((string)$senhaDigitada);
-    if ($senhaDigitada === '') {
+    if ($senhaDigitada === '' || empty($hash)){
         return false;
     }
-    if (!empty($hash) && password_verify($senhaDigitada, $hash)) {
-        return true;
-    }
-    $pin = pinNascimento($dataNascimento);
-    return ($pin !== '' && hash_equals($pin, $senhaDigitada));
+
+    // Só o hash vale (o reset já grava o Pin como hash temporário)
+    return password_verify($senhaDigitada, $hash);
+}
+
+    // Topo de aluno/painel_aluno.php ou admin/painel_admin.php
+if (!empty($_SESSION['forcar_trocar_senha'])) {
+    header("Location: ../auth/trocar_senha.php");
+    exit;
 }
 
 /**
@@ -246,6 +263,12 @@ function validarEmail($email)
 function colunaExiste(PDO $conn, $tabela, $coluna)
 {
     try {
+        if ($conn->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $stmt = $conn->query("PRAGMA table_info(`$tabela`)");
+            $colunas = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+            return in_array($coluna, $colunas, true);
+        }
+
         $stmt = $conn->prepare("SHOW COLUMNS FROM `$tabela` LIKE :coluna");
         $stmt->execute([':coluna' => $coluna]);
         return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
@@ -254,15 +277,31 @@ function colunaExiste(PDO $conn, $tabela, $coluna)
     }
 }
 
-// ============================================================================
-// 4. ESTRUTURA E MIGRAÇÃO AUTOMÁTICA DO BANCO DE DADOS (XAMPP / MySQL)
-// ============================================================================
+function isSQLiteConnection(PDO $conn): bool
+{
+    return strtolower((string)$conn->getAttribute(PDO::ATTR_DRIVER_NAME)) === 'sqlite';
+}
 
 /**
  * Garante a criação e atualização das tabelas de Administradores.
  */
 function garantirEstruturaAdmins(PDO $conn)
 {
+    if (isSQLiteConnection($conn)) {
+        $conn->exec("CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT NOT NULL UNIQUE,
+            senha TEXT NOT NULL,
+            nome TEXT NULL,
+            email TEXT NULL,
+            telefone TEXT NULL,
+            cpf TEXT NULL,
+            data_nascimento TEXT NULL,
+            token_recuperacao TEXT NULL
+        )");
+        return;
+    }
+
     $conn->exec("CREATE TABLE IF NOT EXISTS admins (
         id INT AUTO_INCREMENT PRIMARY KEY,
         usuario VARCHAR(50) NOT NULL UNIQUE,
@@ -290,6 +329,19 @@ function garantirEstruturaAdmins(PDO $conn)
  */
 function garantirTabelaProgresso(PDO $conn)
 {
+    if (isSQLiteConnection($conn)) {
+        $conn->exec("CREATE TABLE IF NOT EXISTS progresso_cursos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER NOT NULL,
+            curso_id INTEGER NOT NULL,
+            aula_id INTEGER NULL DEFAULT 0,
+            concluido INTEGER NOT NULL DEFAULT 1,
+            data_conclusao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (aluno_id, curso_id, aula_id)
+        )");
+        return;
+    }
+
     $conn->exec("CREATE TABLE IF NOT EXISTS progresso_cursos (
         id INT AUTO_INCREMENT PRIMARY KEY,
         aluno_id INT NOT NULL,
@@ -312,6 +364,62 @@ function garantirTabelasTCC(PDO $conn)
 {
     garantirEstruturaAdmins($conn);
     garantirTabelaProgresso($conn);
+
+    if (isSQLiteConnection($conn)) {
+        $conn->exec("CREATE TABLE IF NOT EXISTS certificados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER NOT NULL,
+            curso_id INTEGER NOT NULL,
+            codigo_autenticidade TEXT NOT NULL UNIQUE,
+            carga_horaria INTEGER DEFAULT 40,
+            data_emissao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS duvidas_aulas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            curso_id INTEGER NOT NULL,
+            aula_id INTEGER DEFAULT 0,
+            aluno_id INTEGER NOT NULL,
+            pergunta TEXT NOT NULL,
+            resposta TEXT NULL,
+            respondido_por_admin_id INTEGER NULL,
+            status TEXT DEFAULT 'pendente',
+            data_pergunta DATETIME DEFAULT CURRENT_TIMESTAMP,
+            data_resposta DATETIME NULL
+        )");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS avaliacoes_cursos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            curso_id INTEGER NOT NULL,
+            aluno_id INTEGER NOT NULL,
+            nota INTEGER NOT NULL CHECK(nota >= 1 AND nota <= 5),
+            comentario TEXT NULL,
+            data_avaliacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (aluno_id, curso_id)
+        )");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS quizzes_perguntas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            curso_id INTEGER NOT NULL,
+            pergunta TEXT NOT NULL,
+            opcao_a TEXT NOT NULL,
+            opcao_b TEXT NOT NULL,
+            opcao_c TEXT NOT NULL,
+            opcao_d TEXT NOT NULL,
+            resposta_correta TEXT NOT NULL
+        )");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS quizzes_respostas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER NOT NULL,
+            curso_id INTEGER NOT NULL,
+            nota_percentual INTEGER NOT NULL DEFAULT 0,
+            aprovado INTEGER NOT NULL DEFAULT 0,
+            data_resposta DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (aluno_id, curso_id)
+        )");
+        return;
+    }
 
     // 1. Tabela de Certificados com Hash e Registro de Carga Horária
     $conn->exec("CREATE TABLE IF NOT EXISTS certificados (
@@ -389,7 +497,7 @@ function obterProgressoCurso(PDO $conn, $alunoId, $cursoId)
     $totalAulas = (int)$stmtAulas->fetchColumn();
 
     if ($totalAulas > 0) {
-        $stmtConc = $conn->prepare("SELECT COUNT(*) FROM progresso_cursos WHERE aluno_id = ? AND curso_id = ? AND concluido = 1 AND aula_id > 0");
+        $stmtConc = $conn->prepare("SELECT COUNT(*) FROM progresso_cursos p JOIN aulas a ON a.id = p.aula_id AND a.curso_id = p.curso_id WHERE p.aluno_id = ? AND p.curso_id = ? AND p.concluido = 1");;
         $stmtConc->execute([$alunoId, $cursoId]);
         $concluidas = (int)$stmtConc->fetchColumn();
         return min(100, (int)round(($concluidas / $totalAulas) * 100));

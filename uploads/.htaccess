@@ -1,10 +1,26 @@
 # ==============================================================================
-# SEGURANÇA OWASP: BLOQUEIO DE EXECUÇÃO DE SCRIPTS NA PASTA DE UPLOADS
-# Impede a execução direta de arquivos .php, .phtml, .cgi, etc.
+# SEGURANÇA OWASP: PROTEÇÃO COMPLETA DA PASTA DE UPLOADS
+# 1. Bloqueia execução de scripts PHP, CGI, etc
+# 2. Bloqueia acesso direto a PDFs, documentos e materiais didáticos
+# 3. Redireciona requisições não autorizadas
 # ==============================================================================
+
+# CAMADA 1: Bloqueia execução de scripts
 <FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|phar|inc|cgi|pl|sh)$">
     Order Deny,Allow
     Deny from all
 </FilesMatch>
 
+# CAMADA 2: Bloqueia acesso direto aos PDFs e materiais (força download via script PHP)
+<FilesMatch "\.(pdf|doc|docx|xls|xlsx|csv|ppt|pptx|zip|rar|7z)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# CAMADA 3: Desabilita listagem de diretórios e execução CGI
 Options -ExecCGI -Indexes
+
+# CAMADA 4: Headers de segurança adicional
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "DENY"
+Header set X-XSS-Protection "1; mode=block"

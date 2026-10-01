@@ -14,8 +14,8 @@ require '../includes/conexao.php';
 
 // 3. Recebe parâmetros GET (suporta curso/ebook e a página de retorno)
 $item_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-$tipo    = filter_input(INPUT_GET, 'tipo') ?? 'curso';
-$ref     = filter_input(INPUT_GET, 'ref') ?? 'admin.php'; // Define para onde vai voltar
+$tipo = filter_input(INPUT_GET, 'tipo') ?? 'curso';
+$ref = filter_input(INPUT_GET, 'ref') ?? 'admin.php'; // Define para onde vai voltar
 
 // Higieniza o redirecionamento de retorno (evita URLs externas por segurança)
 $paginas_permitidas = ['admin.php', 'admin_alunos.php'];
@@ -58,9 +58,11 @@ if ($dados) {
 
         // 5. Atualiza o status no banco de dados para 'pago'
         if ($tipo === 'ebook') {
-            $update = $conn->prepare("UPDATE compras_ebooks SET status_pagamento = 'pago' WHERE id = ?");
+            $update = $conn->prepare("UPDATE compras_ebooks ce JOIN ebooks e ON e.id = ce.ebook_id
+            SET ce.status_pagamento = 'pago', ce.pago_em = NOW(), ce.valor_pago = e.preco WHERE ce.id = ?");
         } else {
-            $update = $conn->prepare("UPDATE matriculas SET status_pagamento = 'pago' WHERE id = ?");
+            $update = $conn->prepare("UPDATE matriculas m JOIN cursos c ON c.id = m.curso_id 
+            SET m.status_pagamento = 'pago', m.pago_em = NOW(), m.valor_pago = c.preco WHERE m.id = ?");
         }
         $update->execute([$item_id]);
 
@@ -72,9 +74,9 @@ if ($dados) {
         $baseUrl = $scheme . '://' . $host;
         $urlLogin = $baseUrl . "/auth/login_aluno.php";
 
-        $nomeAluno  = htmlspecialchars($dados['aluno_nome'], ENT_QUOTES, 'UTF-8');
+        $nomeAluno = htmlspecialchars($dados['aluno_nome'], ENT_QUOTES, 'UTF-8');
         $tituloItem = htmlspecialchars($dados['item_titulo'], ENT_QUOTES, 'UTF-8');
-        $rotulo     = ($tipo === 'ebook') ? 'e-book' : 'curso';
+        $rotulo = ($tipo === 'ebook') ? 'e-book' : 'curso';
 
         $assunto = "🎉 Seu acesso ao {$rotulo} " . $tituloItem . " foi liberado!";
 

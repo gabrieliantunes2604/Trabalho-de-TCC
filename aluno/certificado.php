@@ -52,8 +52,9 @@ if (!$is_pago) {
 
 // Verifica se o progresso é 100%
 $progresso = obterProgressoCurso($conn, $aluno_id, $curso_id);
+$quiz = verificarAprovacaoQuiz($conn, $aluno_id, $curso_id);
 
-if ($progresso < 100) {
+if ($progresso < 100 || !$quiz['aprovado']) {
     echo "<!DOCTYPE html>
     <html lang='pt-BR'>
     <head>

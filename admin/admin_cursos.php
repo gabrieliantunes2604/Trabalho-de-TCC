@@ -1,6 +1,7 @@
 <?php
 session_start();
 require '../includes/conexao.php';
+require '../includes/funcoes_config.php';
 
 // Ativa a exibição de erros do PHP para ajudar no depuramento local se algo falhar
 ini_set('display_errors', 1);
@@ -40,34 +41,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Upload da IMAGEM
     $caminho_imagem = $curso_atual['imagem'] ?? '';
     if (isset($_FILES['imagem']) && $_FILES['imagem']['error'] === UPLOAD_ERR_OK) {
-        $pasta_img = "../uploads/";
-        if (!is_dir($pasta_img)) mkdir($pasta_img, 0777, true);
-        $ext = strtolower(pathinfo($_FILES['imagem']['name'], PATHINFO_EXTENSION));
-        $novo_nome_img = "curso_" . uniqid() . "." . $ext;
-        if (move_uploaded_file($_FILES['imagem']['tmp_name'], $pasta_img . $novo_nome_img)) {
-            $caminho_imagem = $pasta_img . $novo_nome_img;
-            if ($curso_atual && !empty($curso_atual['imagem']) && file_exists($curso_atual['imagem'])) {
-                @unlink($curso_atual['imagem']);
-            }
+        $up = uploadSeguro($_FILES['imagem'], '../uploads/', 'imagem');
+        if (!up['sucesso']) {
+            die(htmlspecialchars($up['erro']));
         }
+        $caminho_imagem = $up['caminho'];
+        $nova_img_enviada = true;
     }
 
     // Upload do PDF
     $caminho_pdf = $curso_atual['arquivo_pdf'] ?? '';
     if (isset($_FILES['arquivo_pdf']) && $_FILES['arquivo_pdf']['error'] === UPLOAD_ERR_OK) {
-        $pasta_pdf = "../uploads/pdfs/";
-        if (!is_dir($pasta_pdf)) mkdir($pasta_pdf, 0777, true);
-        $ext_pdf = strtolower(pathinfo($_FILES['arquivo_pdf']['name'], PATHINFO_EXTENSION));
-        if ($ext_pdf === 'pdf') {
-            $novo_nome_pdf = "material_" . uniqid() . ".pdf";
-            if (move_uploaded_file($_FILES['arquivo_pdf']['tmp_name'], $pasta_pdf . $novo_nome_pdf)) {
-                $caminho_pdf = $pasta_pdf . $novo_nome_pdf;
-                if ($curso_atual && !empty($curso_atual['arquivo_pdf']) && file_exists($curso_atual['arquivo_pdf'])) {
-                    @unlink($curso_atual['arquivo_pdf']);
-                }
-            }
+        $up = uploadSeguro($_FILES['arquivo_pdf'], '../uploads/', 'pdf');
+        if (!up['sucesso']) {
+            die(htmlspecialchars($up['erro']));
         }
+        $caminho_pdf = $up['caminho'];
+        $nova_img_enviada = true;
     }
+
 
     // Upload da Planilha
     $caminho_planilha = $curso_atual['arquivo_planilha'] ?? '';

@@ -34,15 +34,22 @@ if (isset($_SESSION['aluno_id'])) {
         exit;
     }
 
-    $stmt = $conn->prepare("SELECT id FROM alunos WHERE email = :email");
-    $stmt->bindParam(':email', $email);
-    $stmt->execute();
+    $stmt = $conn->prepare("SELECT id, senha FROM alunos WHERE email = :email");
+    $stmt->execute([':email' => $email]);
     $aluno = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($aluno) {
+        if (!password_verify($senha, $aluno['senha'])) {
+            echo "<script>alert('Senha Incorreta.');
+                history.back();</script>";
+            exit;
+        }
         $aluno_id = $aluno['id'];
-    } else {
-        $senhaHash = password_hash($senha ?: '123456', PASSWORD_DEFAULT);
+    } else { /*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
+        if (strlen($senha) < 6) {echo "<script>alert('Senha Incorreta.');
+                history.back();</script>";
+            exit;}
+        $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
         $token = bin2hex(random_bytes(16));
         $cpfValor = !empty($cpf) ? formatarCPF($cpf) : ('TMP' . strtoupper(bin2hex(random_bytes(6))));
         $dataNascValor = !empty($data_nascimento) ? $data_nascimento : null;
@@ -60,6 +67,7 @@ if (isset($_SESSION['aluno_id'])) {
         $aluno_id = $conn->lastInsertId();
     }
 
+    session_regenerate_id(true);
     $_SESSION['aluno_id'] = $aluno_id;
     $_SESSION['aluno_nome'] = $nome;
     $_SESSION['aluno_email'] = $email;

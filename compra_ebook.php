@@ -24,7 +24,10 @@ if (!$ebook) {
 
 // Avança para a etapa de pagamento se o usuário confirmar a identificação
 if (isset($_POST['avancar_pagamento'])) {
-    if (!isset($_SESSION['aluno_id'])) {
+    if (!validarTokenCSRF($_POST['csrf_token'] ?? null)) {
+        $mensagem = "<div class='alert alert-danger text-center'>Sua sessão expirou. Por favor, tente novamente.</div>";
+        $etapa = 1;
+    } elseif (!isset($_SESSION['aluno_id'])) {
         $email_destino = trim($_POST['email'] ?? '');
         $senha = trim($_POST['senha'] ?? '');
         $nome_destino = trim($_POST['nome'] ?? '');
@@ -35,18 +38,31 @@ if (isset($_POST['avancar_pagamento'])) {
         if (empty($nome_destino) || !validarEmail($email_destino)) {
             $mensagem = "<div class='alert alert-danger text-center'>Por favor, informe seu nome completo e um e-mail válido.</div>";
             $etapa = 1;
+        } elseif (strlen($senha) < 6) {
+            $mensagem = "<div class='alert alert-danger text-center'>A senha deve ter pelo menos 6 caracteres.</div>";
+            $etapa = 1;
         } elseif (!empty($cpf) && !validarCPF($cpf)) {
             $mensagem = "<div class='alert alert-danger text-center'>O CPF informado é inválido.</div>";
             $etapa = 1;
         } else {
-            $stmt = $conn->prepare("SELECT id FROM alunos WHERE email = :email");
+            $stmt = $conn->prepare("SELECT * FROM alunos WHERE email = :email");
             $stmt->bindParam(':email', $email_destino);
             $stmt->execute();
             $aluno = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!$aluno) {
+            if ($aluno) {
+                if (!senhaConfere($senha, $aluno['senha'] ?? '', $aluno['data_nascimento'] ?? null)) {
+                    $mensagem = "<div class='alert alert-danger text-center'>Este e-mail já possui cadastro. Informe a senha correta para continuar, ou <a href='auth/login_aluno.php'>faça login</a>.</div>";
+                    $etapa = 1;
+                } else {
+                    $_SESSION['aluno_id'] = $aluno['id'];
+                    $_SESSION['aluno_nome'] = $aluno['nome'];
+                    $_SESSION['aluno_email'] = $aluno['email'];
+                    $etapa = 2;
+                }
+            } else {
                 $token = bin2hex(random_bytes(16));
-                $senhaHash = password_hash($senha ?: '123456', PASSWORD_DEFAULT);
+                $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
                 $cpfValor = !empty($cpf) ? formatarCPF($cpf) : ('TMP' . strtoupper(bin2hex(random_bytes(6))));
                 $dataNascValor = !empty($data_nascimento) ? $data_nascimento : null;
 
@@ -59,15 +75,12 @@ if (isset($_POST['avancar_pagamento'])) {
                 $stmtInsert->bindParam(':telefone', $telefone);
                 $stmtInsert->bindParam(':token', $token);
                 $stmtInsert->execute();
-                $aluno_id = $conn->lastInsertId();
-            } else {
-                $aluno_id = $aluno['id'];
-            }
 
-            $_SESSION['aluno_id'] = $aluno_id;
-            $_SESSION['aluno_nome'] = $nome_destino;
-            $_SESSION['aluno_email'] = $email_destino;
-            $etapa = 2;
+                $_SESSION['aluno_id'] = $conn->lastInsertId();
+                $_SESSION['aluno_nome'] = $nome_destino;
+                $_SESSION['aluno_email'] = $email_destino;
+                $etapa = 2;
+            }
         }
     } else {
         $etapa = 2;
@@ -79,7 +92,10 @@ if (isset($_POST['finalizar_compra'])) {
     $aluno_id = $_SESSION['aluno_id'] ?? null;
     $forma_pagamento = $_POST['pagamento'] ?? 'pix';
 
-    if ($aluno_id) {
+    if (!validarTokenCSRF($_POST['csrf_token'] ?? null)) {
+        $mensagem = "<div class='alert alert-danger text-center'>Sua sessão expirou. Por favor, tente novamente.</div>";
+        $etapa = $aluno_id ? 2 : 1;
+    } elseif ($aluno_id) {
         $stmtCheck = $conn->prepare("SELECT id FROM compras_ebooks WHERE aluno_id = :aluno AND ebook_id = :ebook");
         $stmtCheck->bindParam(':aluno', $aluno_id);
         $stmtCheck->bindParam(':ebook', $ebook['id']);
@@ -105,7 +121,8 @@ if (isset($_POST['finalizar_compra'])) {
             $nome_destino = $_SESSION['aluno_nome'] ?? '';
 
             if ($email_destino) {
-                $assunto = "Pedido Recebido - " . $ebook['titulo'];
+                $tituloSeguro = str_replace(["\r", "\n"], '', $ebook['titulo']);
+                $assunto = "Pedido Recebido - " . $tituloSeguro;
                 $corpo = "Olá " . $nome_destino . ",\n\n";
                 $corpo .= "Recebemos o seu pedido do e-book '" . $ebook['titulo'] . "' via " . strtoupper($forma_pagamento) . ".\n\n";
                 $corpo .= "Assim que o pagamento for confirmado, o e-book estará disponível no seu painel para download!\n";
@@ -193,6 +210,7 @@ if (isset($_POST['finalizar_compra'])) {
                     <!-- ==================== ETAPA 1: IDENTIFICAÇÃO ==================== -->
                     <?php if ($etapa == 1): ?>
                         <form action="" method="POST">
+                            <?php echo campoCSRF(); ?>
                             <?php if (isset($_SESSION['aluno_id'])): ?>
                                 <div class="alert alert-info mb-4" style="background-color: #e0f7fa; border-color: #b2ebf2; color: #006064;">
                                     Você está comprando com a conta de <b><?php echo htmlspecialchars($_SESSION['aluno_nome'] ?? 'Aluno'); ?></b>.<br>
@@ -238,6 +256,7 @@ if (isset($_POST['finalizar_compra'])) {
                         </div>
 
                         <form action="" method="POST">
+                            <?php echo campoCSRF(); ?>
                             <div class="mb-4">
                                 <label class="form-label fw-semibold">Forma de Pagamento</label>
                                 <select name="pagamento" class="form-select" required>

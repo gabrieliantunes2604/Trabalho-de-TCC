@@ -528,7 +528,7 @@ $meses_pt = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 =>
                     <li><a href="admin_ebooks.php">📖 E-books</a></li>
                     <li><a href="admin_alunos.php">👥 Alunos</a></li>
                     <li><a href="admin_duvidas.php">💬 Fórum de Dúvidas</a></li>
-                    <li><a href="configuracoes.php">⚙️ Configurações</a></li>
+                    <li class="active"><a href="admin_configuracoes.php">⚙️ Configurações</a></li>
                 </ul>
             </div>
             <div class="sidebar-footer">
@@ -813,11 +813,11 @@ $meses_pt = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 =>
                             relatório</a>
                     </div>
                 </div>
-                <div class="col-lg-6">
+                <div class="col-lg-6" id="relatorio-financeiro">
                     <div class="card-custom h-100">
                         <h5 class="fw-bold">Relatório financeiro do mês</h5>
                         <p class="text-muted small mb-3">Cursos e e-books com pagamento confirmado.</p>
-                        <form method="GET" class="row g-2 align-items-end mb-3">
+                        <form method="GET" action="#relatorio-financeiro" class="row g-2 align-items-end mb-3">
                             <div class="col-5">
                                 <label class="form-label small fw-semibold">Mês</label>
                                 <select name="mes" class="form-select">
@@ -870,6 +870,18 @@ $meses_pt = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 =>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Garante que, ao consultar mês/ano, a página volte exatamente ao relatório.
+        document.addEventListener('DOMContentLoaded', function () {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('mes') || params.has('ano')) {
+                const relatorio = document.getElementById('relatorio-financeiro');
+                if (relatorio && window.location.hash !== '#relatorio-financeiro') {
+                    relatorio.scrollIntoView({ behavior: 'auto', block: 'start' });
+                }
+            }
+        });
+    </script>
     <?php include '../includes/footer.php'; ?>
 </body>
 

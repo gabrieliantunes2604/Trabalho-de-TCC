@@ -62,14 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Upload do PDF
     if (isset($_FILES['arquivo_pdf']) && $_FILES['arquivo_pdf']['error'] === UPLOAD_ERR_OK) {
-        $ext_pdf = strtolower(pathinfo($_FILES['arquivo_pdf']['name'], PATHINFO_EXTENSION));
-
-        if ($ext_pdf === 'pdf') {
-            $novo_nome_pdf = "ebook_arq_" . uniqid() . ".pdf";
-            if (move_uploaded_file($_FILES['arquivo_pdf']['tmp_name'], $pasta_pdfs . $novo_nome_pdf)) {
-                $caminho_pdf = "pdfs/" . $novo_nome_pdf;
-            }
+        $up = uploadSeguro($_FILES['arquivo_pdf'], '../uploads/', 'pdf');
+        if (!up['sucesso']) {
+            die(htmlspecialchars($up['erro']));
         }
+        $caminho_pdf = $up['caminho'];
+        $nova_img_enviada = true;
     }
 
     if ($id_edit) {

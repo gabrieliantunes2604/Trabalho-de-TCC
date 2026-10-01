@@ -17,30 +17,6 @@ if ($tipo === 'admin') {
     garantirEstruturaAdmins($conn);
 }
 
-if ($modo === 'pin') {
-    $pinInformado = preg_replace('/\D+/', '', $_POST['pin'] ?? '');
-    if ($tipo === 'admin') {
-        $stmt = $conn->prepare("SELECT id, data_nascimento FROM admins WHERE email = :email OR usuario = :email LIMIT 1");
-    } else {
-        $stmt = $conn->prepare("SELECT id, data_nascimento FROM alunos WHERE email = :email LIMIT 1");
-    }
-    $stmt->execute(['email' => $email]);
-    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $pinReal = $usuario ? pinNascimento($usuario['data_nascimento'] ?? '') : '';
-    if ($usuario && $pinReal !== '' && hash_equals($pinReal, $pinInformado)) {
-        $hash = password_hash($pinReal, PASSWORD_DEFAULT);
-        if ($tipo === 'admin') {
-            $conn->prepare("UPDATE admins SET senha = ?, token_recuperacao = NULL WHERE id = ?")->execute([$hash, $usuario['id']]);
-        } else {
-            $conn->prepare("UPDATE alunos SET senha = ?, token_recuperacao = NULL WHERE id = ?")->execute([$hash, $usuario['id']]);
-        }
-        header("Location: esqueci_senha.php?tipo={$tipo}&msg=ok_pin");
-        exit;
-    }
-    header("Location: esqueci_senha.php?tipo={$tipo}&msg=erro");
-    exit;
-}
 
 if ($tipo === 'admin') {
     $stmt = $conn->prepare("SELECT id FROM admins WHERE email = :email OR usuario = :email LIMIT 1");
@@ -50,16 +26,14 @@ if ($tipo === 'admin') {
 $stmt->execute(['email' => $email]);
 $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if ($usuario) {
-    $token = bin2hex(random_bytes(50));
-    if ($tipo === 'admin') {
-        $stmt_update = $conn->prepare("UPDATE admins SET token_recuperacao = :token WHERE id = :id");
-    } else {
-        $stmt_update = $conn->prepare("UPDATE alunos SET token_recuperacao = :token WHERE id = :id");
-    }
-    $stmt_update->execute(['token' => $token, 'id' => $usuario['id']]);
-
+if ($usuario && !empty($usuario['email'])) {    // SELECT id, email
+    $token = bin2hex(random_bytes(32));
+    $tabela = $tipo === 'admin' ? 'admins' : 'alunos';
+    $conn->prepare("UPDATE $tabela SET token_recuperacao = :token, token_expiracao = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?")
+        ->execute(['hash'('sha256', $token), $usuario['id']]);
     $link = $base . $pasta . "/redefinir_senha.php?token=" . $token . "&tipo=" . $tipo;
+    @mail($usuario['email'], "Recuperação de senha", "Acesse em até 30 min: $link");
+}
 
     echo "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head><body class='bg-light d-flex align-items-center justify-content-center' style='height: 100vh;'>";
     echo "<div class='card p-5 text-center shadow-sm' style='max-width: 500px; border-radius: 12px;'>";
@@ -68,6 +42,6 @@ if ($usuario) {
     echo "<a href='" . htmlspecialchars($link) . "' class='btn btn-success btn-lg fw-bold'>Simular clique no E-mail</a>";
     echo "</div></body></html>";
     exit;
-}
+
 
 echo "<script>alert('Se este e-mail estiver cadastrado, um link foi enviado.'); window.location.href='esqueci_senha.php?tipo={$tipo}';</script>";

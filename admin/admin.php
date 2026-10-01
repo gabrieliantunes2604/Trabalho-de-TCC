@@ -3,18 +3,29 @@ session_start();
 require '../includes/conexao.php';
 require_once '../includes/funcoes_config.php';
 
-if (!isset($_SESSION['admin_logado']) || $_SESSION['admin_logado'] !== true) {
+if (!isset($_SESSION['admin_logado']) ||$_SESSION['admin_logado'] !== true) {
     header("Location: ../auth/login.php");
     exit;
 }
 
 // Captura as datas do filtro de calendário (se enviadas)
-$data_inicio = $_GET['data_inicio'] ?? '';
-$data_fim = $_GET['data_fim'] ?? '';
+$data_inicio =$_GET['data_inicio'] ?? '';
+$data_fim =$_GET['data_fim'] ?? '';
+$data_inicio = is_string($data_inicio) ? trim($data_inicio) : '';$data_fim = is_string($data_fim) ? trim($data_fim) : '';
+
+if ($data_inicio !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $data_inicio)) {$data_inicio = '';
+}
+if ($data_fim !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $data_fim)) {$data_fim = '';
+}
+
+if ($data_inicio !== '' && DateTime::createFromFormat('Y-m-d', $data_inicio) === false) {$data_inicio = '';
+}
+if ($data_fim !== '' && DateTime::createFromFormat('Y-m-d', $data_fim) === false) {$data_fim = '';
+}
 
 // 1. Resumo de Alunos
-$stmtTotal = $conn->query("SELECT COUNT(*) FROM alunos");
-$totalAlunos = (int) $stmtTotal->fetchColumn();
+$stmtTotal =$conn->query("SELECT COUNT(*) FROM alunos");
+$totalAlunos = (int)$stmtTotal->fetchColumn();
 
 // Conta alunos com débitos pendentes (Considera Cursos e E-books)
 $sqlDebito = "
@@ -25,28 +36,26 @@ $sqlDebito = "
         OR
         (SELECT COUNT(*) FROM compras_ebooks ce WHERE ce.aluno_id = a.id AND (ce.status_pagamento IS NULL OR LOWER(TRIM(ce.status_pagamento)) NOT IN ('pago', 'aprovado', 'confirmado', 'cancelado'))) > 0
 ";
-$stmtDebito = $conn->query($sqlDebito);
-$alunosEmDebito = (int) $stmtDebito->fetchColumn();
-$alunosPagantes = $totalAlunos - $alunosEmDebito;
+$stmtDebito =$conn->query($sqlDebito);$alunosEmDebito = (int) $stmtDebito->fetchColumn();$alunosPagantes = $totalAlunos -$alunosEmDebito;
 
 // 2. Faturamento Total Acumulado (Geral)
 $sqlFaturamento = "
     SELECT SUM(valor) AS total FROM (
-        SELECT c.preco AS valor 
+        SELECT COALESCE(m.valor_pago, c.preco) AS valor 
         FROM matriculas m 
         JOIN cursos c ON m.curso_id = c.id 
         WHERE LOWER(TRIM(m.status_pagamento)) IN ('pago', 'aprovado', 'confirmado')
         
         UNION ALL
         
-        SELECT e.preco AS valor 
+        SELECT COALESCE(ce.valor_pago, e.preco) AS valor 
         FROM compras_ebooks ce 
         JOIN ebooks e ON ce.ebook_id = e.id 
         WHERE LOWER(TRIM(ce.status_pagamento)) IN ('pago', 'aprovado', 'confirmado')
     ) AS faturamento";
 
 $stmtFat = $conn->query($sqlFaturamento);
-$totalDinheiro = $stmtFat->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+$totalDinheiro =$stmtFat->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
 
 // 3. Dados Reais do Gráfico: Faturamento dos últimos 6 meses
 $sqlGrafico = "
@@ -55,14 +64,14 @@ $sqlGrafico = "
         DATE_FORMAT(data_registro, '%b/%y') AS mes_label,
         SUM(valor) AS total_mes
     FROM (
-        SELECT c.preco AS valor, COALESCE(m.data_matricula, NOW()) AS data_registro
+        SELECT COALESCE(m.valor_pago, c.preco) AS valor, COALESCE(m.pago_em, m.data_matricula) AS data_registro
         FROM matriculas m 
         JOIN cursos c ON m.curso_id = c.id 
         WHERE LOWER(TRIM(m.status_pagamento)) IN ('pago', 'aprovado', 'confirmado')
 
         UNION ALL
 
-        SELECT e.preco AS valor, COALESCE(ce.data_compra, NOW()) AS data_registro
+        SELECT COALESCE(ce.valor_pago, e.preco) AS valor, COALESCE(ce.pago_em, ce.data_compra) AS data_registro
         FROM compras_ebooks ce 
         JOIN ebooks e ON ce.ebook_id = e.id 
         WHERE LOWER(TRIM(ce.status_pagamento)) IN ('pago', 'aprovado', 'confirmado')
@@ -72,13 +81,12 @@ $sqlGrafico = "
     ORDER BY mes_ano ASC
 ";
 $stmtGrafico = $conn->query($sqlGrafico);
-$dadosGrafico = $stmtGrafico->fetchAll(PDO::FETCH_ASSOC);
+$dadosGrafico =$stmtGrafico->fetchAll(PDO::FETCH_ASSOC);
 
-$graficoLabels = [];
-$graficoValores = [];
+$graficoLabels = [];$graficoValores = [];
 
-foreach ($dadosGrafico as $linha) {
-    $graficoLabels[] = $linha['mes_label'];
+foreach ($dadosGrafico as$linha) {
+    $graficoLabels[] =$linha['mes_label'];
     $graficoValores[] = (float)$linha['total_mes'];
 }
 
@@ -86,10 +94,9 @@ foreach ($dadosGrafico as $linha) {
 $whereFiltro = "";
 $params = [];
 
-if (!empty($data_inicio) && !empty($data_fim)) {
-    $whereFiltro = " WHERE DATE(data_registro) BETWEEN :data_inicio AND :data_fim ";
-    $params[':data_inicio'] = $data_inicio;
-    $params[':data_fim'] = $data_fim;
+if (!empty($data_inicio) && !empty($data_fim)) {$whereFiltro = " WHERE DATE(data_registro) BETWEEN :data_inicio AND :data_fim ";
+    $params[':data_inicio'] =$data_inicio;
+    $params[':data_fim'] =$data_fim;
 }
 
 $sqlLancamentos = "
@@ -101,8 +108,8 @@ $sqlLancamentos = "
             a.nome AS aluno_nome,
             COALESCE(m.forma_pagamento, 'PIX') AS forma_pagamento,
             COALESCE(m.status_pagamento, 'pendente') AS status_pagamento,
-            c.preco AS valor,
-            COALESCE(m.data_matricula, NOW()) AS data_registro
+            COALESCE(m.valor_pago, c.preco) AS valor,
+            COALESCE(m.pago_em, m.data_matricula) AS data_registro
         FROM matriculas m
         JOIN alunos a ON m.aluno_id = a.id
         JOIN cursos c ON m.curso_id = c.id
@@ -116,8 +123,8 @@ $sqlLancamentos = "
             a.nome AS aluno_nome,
             COALESCE(ce.forma_pagamento, 'PIX') AS forma_pagamento,
             COALESCE(ce.status_pagamento, 'pendente') AS status_pagamento,
-            e.preco AS valor,
-            COALESCE(ce.data_compra, NOW()) AS data_registro
+            COALESCE(ce.valor_pago, e.preco) AS valor,
+            COALESCE(ce.pago_em, ce.data_compra) AS data_registro
         FROM compras_ebooks ce
         JOIN alunos a ON ce.aluno_id = a.id
         JOIN ebooks e ON ce.ebook_id = e.id
@@ -128,13 +135,13 @@ $sqlLancamentos = "
 
 $stmtLancamentos = $conn->prepare($sqlLancamentos);
 $stmtLancamentos->execute($params);
-$lancamentos = $stmtLancamentos->fetchAll(PDO::FETCH_ASSOC);
+$lancamentos =$stmtLancamentos->fetchAll(PDO::FETCH_ASSOC);
 
 // Totalizador do período filtrado
 $faturamentoFiltrado = 0;
-foreach ($lancamentos as $item) {
+foreach ($lancamentos as$item) {
     if (in_array(strtolower(trim($item['status_pagamento'])), ['pago', 'aprovado', 'confirmado'], true)) {
-        $faturamentoFiltrado += $item['valor'];
+        $faturamentoFiltrado += (float)$item['valor'];
     }
 }
 ?>
@@ -358,8 +365,14 @@ foreach ($lancamentos as $item) {
 
         footer,
         .footer {
-            margin-left: 250px;
-            width: calc(100% - 250px);
+            margin-left: var(--sidebar-width);
+            width: calc(100% - var(--sidebar-width));
+        }
+
+        .chart-container {
+            position: relative;
+            min-height: 250px;
+            width: 100%;
         }
     </style>
 </head>
@@ -391,7 +404,7 @@ foreach ($lancamentos as $item) {
 
         <!-- CONTEÚDO PRINCIPAL -->
         <main class="main-content">
-            <?php if (isset($_GET['msg']) && $_GET['msg'] === 'aprovado'): ?>
+            <?php if (isset($_GET['msg']) &&$_GET['msg'] === 'aprovado'): ?>
                 <div class="alert alert-success alert-dismissible fade show fw-semibold" role="alert">
                     ✅ Matrícula/Compra aprovada com sucesso! O e-mail de confirmação foi disparado.
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -410,10 +423,14 @@ foreach ($lancamentos as $item) {
             <div class="row mb-4">
                 <!-- ÁREA DO GRÁFICO REAL -->
                 <div class="col-lg-8">
-                    <div class="card-custom h-100">
-                        <h5 class="fw-bold mb-1">Fluxo de Matrículas Mensal</h5>
-                        <p class="text-muted small mb-4">Performance financeira mensal consolidada (Dados Reais).</p>
-                        <canvas id="meuGrafico" height="100"></canvas>
+                    <div class="card-custom h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <h5 class="fw-bold mb-1">Fluxo de Matrículas Mensal</h5>
+                            <p class="text-muted small mb-4">Performance financeira mensal consolidada.</p>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="meuGrafico"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -421,7 +438,7 @@ foreach ($lancamentos as $item) {
                 <div class="col-lg-4">
                     <div class="card-custom card-blue mb-4">
                         <p class="mb-1 opacity-75">Faturamento Total Real</p>
-                        <h2 class="fw-bold mb-3">R$ <?php echo number_format($totalDinheiro, 2, ',', '.'); ?></h2>
+                        <h2 class="fw-bold mb-3">R$<?php echo number_format($totalDinheiro, 2, ',', '.'); ?></h2>
                         <p class="mb-0 small">Apenas pagamentos consolidados</p>
                     </div>
 
@@ -451,7 +468,7 @@ foreach ($lancamentos as $item) {
                         <?php if (!empty($data_inicio) && !empty($data_fim)): ?>
                             <small class="text-primary fw-semibold">
                                 Período Filtrado: <?php echo date('d/m/Y', strtotime($data_inicio)); ?> até <?php echo date('d/m/Y', strtotime($data_fim)); ?>
-                                (Total Confirmado: R$ <?php echo number_format($faturamentoFiltrado, 2, ',', '.'); ?>)
+                                (Total Confirmado: R$<?php echo number_format($faturamentoFiltrado, 2, ',', '.'); ?>)
                             </small>
                         <?php endif; ?>
                     </div>
@@ -471,7 +488,7 @@ foreach ($lancamentos as $item) {
                         </thead>
                         <tbody>
                             <?php if (!empty($lancamentos)): ?>
-                                <?php foreach ($lancamentos as $item): 
+                                <?php foreach ($lancamentos as$item): 
                                     $isPago = in_array(strtolower(trim($item['status_pagamento'])), ['pago', 'aprovado', 'confirmado'], true);
                                     $dataFmt = date('d M, Y - H:i', strtotime($item['data_registro']));
                                 ?>
@@ -491,7 +508,7 @@ foreach ($lancamentos as $item) {
                                             <?php if ($isPago): ?>
                                                 <span class="badge-pago">Pago</span>
                                             <?php else: ?>
-                                                <a href="aprovar_matricula.php?id=<?php echo $item['lancamento_id']; ?>&tipo=<?php echo $item['tipo_item']; ?>&ref=admin.php" 
+                                                <a href="aprovar_matricula.php?id=<?php echo $item['lancamento_id']; ?>&tipo=<?php echo$item['tipo_item']; ?>&ref=admin.php" 
                                                    class="btn-aprovar-rapido"
                                                    onclick="return confirm('Aprovar este pagamento agora?')">
                                                     ⏳ Aprovar
@@ -499,7 +516,7 @@ foreach ($lancamentos as $item) {
                                             <?php endif; ?>
                                         </td>
                                         <td class="text-end fw-bold text-success">
-                                            R$ <?php echo number_format($item['valor'], 2, ',', '.'); ?>
+                                            R$<?php echo number_format($item['valor'], 2, ',', '.'); ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -513,7 +530,7 @@ foreach ($lancamentos as $item) {
                 </div>
             </div>
 
-            <!-- FILTRO DE PERÍODO E BOTÃO DE EXPORTAÇÃO (ABAIXO DAS MATRÍCULAS) -->
+            <!-- FILTRO DE PERÍODO E BOTÃO DE EXPORTAÇÃO -->
             <div class="card-custom mt-4">
                 <h6 class="fw-bold mb-3"><i class="bi bi-funnel"></i> Filtrar Lançamentos e Exportar Relatório por Período</h6>
                 <form method="GET" class="row g-3 align-items-end">
@@ -540,8 +557,8 @@ foreach ($lancamentos as $item) {
     
     <script>
         // Dados Reais do Banco vindos do PHP
-        const labelsGrafico = <?php echo json_encode($graficoLabels); ?>;
-        const valoresGrafico = <?php echo json_encode($graficoValores); ?>;
+        const labelsGrafico = <?php echo json_encode($graficoLabels, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const valoresGrafico = <?php echo json_encode($graficoValores, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
         // Renderização do Gráfico Real
         const ctx = document.getElementById('meuGrafico').getContext('2d');
@@ -559,6 +576,7 @@ foreach ($lancamentos as $item) {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -575,7 +593,7 @@ foreach ($lancamentos as $item) {
                         grid: { color: '#f0f0f0' },
                         ticks: {
                             callback: function(value) {
-                                return 'R$ ' + value;
+                                return 'R$ ' + value.toLocaleString('pt-BR');
                             }
                         }
                     },
@@ -587,9 +605,9 @@ foreach ($lancamentos as $item) {
         // Exportação de PDF com suporte à tabela e dados filtrados
         function gerarPDF() {
             const elemento = document.getElementById('area-relatorio');
-            const dataIni = "<?php echo $data_inicio; ?>";
-            const dataFim = "<?php echo $data_fim; ?>";
-            
+            const dataIni = <?php echo json_encode($data_inicio, JSON_HEX_TAG); ?>;
+            const dataFim = <?php echo json_encode($data_fim, JSON_HEX_TAG); ?>;
+
             let nomeArquivo = 'relatorio_lancamentos.pdf';
             if(dataIni && dataFim) {
                 nomeArquivo = `relatorio_financeiro_${dataIni}_ate_${dataFim}.pdf`;

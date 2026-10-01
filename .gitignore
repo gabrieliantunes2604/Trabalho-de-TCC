@@ -1,1 +1,5 @@
 .env
+comandos.md
+.phpunit.result.cache
+phpunit.phar
+junit.xml
