@@ -165,34 +165,69 @@ $ebooks = $stmtEbooks->fetchAll(PDO::FETCH_ASSOC);
 
             <div class="row g-4">
                 <?php if (!empty($cursos_destaque)): ?>
+
                     <?php foreach ($cursos_destaque as $curso): ?>
-                        <?php $imagem_curso = !empty($curso['imagem']) ? $curso['imagem'] : 'https://placehold.co/600x400/111c44/FFFFFF?text=Engenharia+Academy'; ?>
+
+                        <?php
+                        $imagem_padrao = 'uploads/capa_padrao.png';
+
+                        $imagem_curso = !empty($curso['imagem'])
+                            ? $curso['imagem']
+                            : $imagem_padrao;
+
+                        // Remove ../ caso tenha sido salvo no banco
+                        $imagem_curso = preg_replace('#^(\.\./)+#', '', $imagem_curso);
+                        ?>
 
                         <div class="col-md-6 col-lg-4">
                             <div class="card card-produto h-100 position-relative d-flex flex-column"
                                 style="border-top: 4px solid #4318FF;">
-                                <img src="<?php echo (strpos($imagem_curso, 'http') === 0) ?$imagem_curso : str_replace('../', '', $imagem_curso); ?>" class="card-img-top" alt="Capa do curso">
+
+                                <img src="<?php echo htmlspecialchars($imagem_curso); ?>" class="card-img-top"
+                                    alt="Capa do curso <?php echo htmlspecialchars($curso['titulo']); ?>"
+                                    onerror="this.onerror=null; this.src='uploads/capa_padrao.png';">
+
                                 <div class="p-4 d-flex flex-column flex-grow-1">
-                                    <h4 class="fw-bold text-dark mb-3"><?php echo htmlspecialchars($curso['titulo']); ?></h4>
+
+                                    <h4 class="fw-bold text-dark mb-3">
+                                        <?php echo htmlspecialchars($curso['titulo']); ?>
+                                    </h4>
+
                                     <p class="text-muted flex-grow-1 small">
-                                        <?php echo strlen($curso['descricao']) > 100 ? substr(htmlspecialchars($curso['descricao']), 0, 100) . '...' : htmlspecialchars($curso['descricao']); ?>
+                                        <?php
+                                        echo strlen($curso['descricao']) > 100
+                                            ? substr(htmlspecialchars($curso['descricao']), 0, 100) . '...'
+                                            : htmlspecialchars($curso['descricao']);
+                                        ?>
                                     </p>
+
                                     <div class="mt-auto pt-3 border-top">
-                                        <h3 class="fw-bold text-primary mb-4">R$
-                                            <?php echo number_format($curso['preco'], 2, ',', '.'); ?>
+
+                                        <h3 class="fw-bold text-primary mb-4">
+                                            R$ <?php echo number_format($curso['preco'], 2, ',', '.'); ?>
                                         </h3>
+
                                         <a href="detalhes_curso.php?id=<?php echo $curso['id']; ?>"
-                                            class="btn btn-comprar py-2 w-100 rounded-3">Ver Detalhes</a>
+                                            class="btn btn-comprar py-2 w-100 rounded-3">
+                                            Ver Detalhes
+                                        </a>
+
                                     </div>
+
                                 </div>
                             </div>
                         </div>
+
                     <?php endforeach; ?>
+
                 <?php else: ?>
-                    <p class="text-muted">Novos cursos em destaque serão adicionados em breve.</p>
+
+                    <p class="text-muted">
+                        Novos cursos em destaque serão adicionados em breve.
+                    </p>
+
                 <?php endif; ?>
             </div>
-        </div>
     </section>
 
     <!-- Seção: Promoções -->

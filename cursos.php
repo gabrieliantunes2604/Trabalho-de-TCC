@@ -24,9 +24,9 @@ $todos_cursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         .hero-cursos {
-            background: linear-gradient(135deg, #111c44 0%, #4318FF 100%);
+            background: linear-gradient(135deg, #111c44 0%, #1b2b65 100%);
             color: white;
-            padding: 60px 0;
+            padding: 100px 0;
         }
 
         .card-produto {
@@ -95,7 +95,14 @@ $todos_cursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                     <!-- Lógica para imagem padrão caso o curso não tenha foto -->
                     <?php
-                    $imagem_curso = !empty($curso['imagem']) ? $curso['imagem'] : 'https://placehold.co/600x400/111c44/FFFFFF?text=Engenharia+Academy';
+                    $imagem_padrao = 'uploads/capa_padrao.png';
+
+                    $imagem_curso = !empty($curso['imagem'])
+                        ? $curso['imagem']
+                        : $imagem_padrao;
+
+                    // Corrige caminhos salvos com ../
+                    $imagem_curso = preg_replace('#^(\.\./)+#', '', $imagem_curso);
                     ?>
 
                     <div class="col-md-6 col-lg-4">
@@ -107,8 +114,10 @@ $todos_cursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endif; ?>
 
                             <!-- Imagem do Curso -->
+                            <!-- Imagem do Curso -->
                             <img src="<?php echo htmlspecialchars($imagem_curso); ?>" class="card-img-top"
-                                alt="Capa do curso <?php echo htmlspecialchars($curso['titulo']); ?>">
+                                alt="Capa do curso <?php echo htmlspecialchars($curso['titulo']); ?>"
+                                onerror="this.onerror=null; this.src='uploads/capa_padrao.png';">
 
                             <!-- Corpo do Card -->
                             <div class="p-4 d-flex flex-column flex-grow-1">
@@ -120,10 +129,12 @@ $todos_cursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <div class="mt-auto pt-3 border-top">
                                     <?php if ($curso['promocao'] == 1): ?>
                                         <h3 class="fw-bold text-danger mb-4">R$
-                                            <?php echo number_format($curso['preco'], 2, ',', '.'); ?></h3>
+                                            <?php echo number_format($curso['preco'], 2, ',', '.'); ?>
+                                        </h3>
                                     <?php else: ?>
                                         <h3 class="fw-bold text-primary mb-4">R$
-                                            <?php echo number_format($curso['preco'], 2, ',', '.'); ?></h3>
+                                            <?php echo number_format($curso['preco'], 2, ',', '.'); ?>
+                                        </h3>
                                     <?php endif; ?>
 
                                     <!-- CORRIGIDO: Direcionando para aluno/detalhes_curso.php -->

@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Upload do PDF
     if (isset($_FILES['arquivo_pdf']) && $_FILES['arquivo_pdf']['error'] === UPLOAD_ERR_OK) {
         $up = uploadSeguro($_FILES['arquivo_pdf'], '../uploads/', 'pdf');
-        if (!up['sucesso']) {
+        if (!$up['sucesso']) {
             die(htmlspecialchars($up['erro']));
         }
         $caminho_pdf = $up['caminho'];

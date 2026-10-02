@@ -479,27 +479,27 @@ $statusQuiz = verificarAprovacaoQuiz($conn, $aluno_id, $curso_id);
                             <!-- ABA 1: RESUMO DO CURSO/AULA -->
                             <div class="tab-pane fade show active text-muted" id="resumo">
                                 <h6 class="fw-bold text-dark mb-2">
-                                    <?php echo htmlspecialchars($titulo_aula_exibicao); ?></h6>
+                                    <?php echo htmlspecialchars($titulo_aula_exibicao); ?>
+                                </h6>
                                 <p><?php echo nl2br(htmlspecialchars($curso_comprado['descricao'])); ?></p>
                             </div>
 
                             <!-- ABA 2: MATERIAIS COMPLEMENTARES -->
                             <div class="tab-pane fade" id="materiais">
                                 <h6 class="fw-bold text-dark mb-3">Downloads disponíveis para esta aula:</h6>
+
                                 <?php if (!empty($pdf_aula)): ?>
-                                    <a href="<?php echo htmlspecialchars($pdf_aula); ?>" download
-                                        class="btn btn-outline-primary me-2 mb-2">
+                                    <!-- Adiciona ../ antes do caminho para sair da pasta /aluno/ -->
+                                    <a href="download_material.php?curso_id=<?php echo (int) $curso_id; ?>&tipo=pdf" class="btn btn-outline-primary me-2 mb-2">
                                         <i class="bi bi-file-pdf"></i> Baixar Material em PDF
                                     </a>
                                 <?php endif; ?>
 
                                 <?php if (!empty($planilha_aula)): ?>
-                                    <a href="<?php echo htmlspecialchars($planilha_aula); ?>" download
-                                        class="btn btn-outline-success mb-2">
+                                    <a href="download_material.php?curso_id=<?php echo (int) $curso_id; ?>&tipo=planilha" class="btn btn-outline-success mb-2">
                                         <i class="bi bi-file-earmark-spreadsheet"></i> Baixar Planilha de Apoio
                                     </a>
                                 <?php endif; ?>
-
                                 <?php if (empty($pdf_aula) && empty($planilha_aula)): ?>
                                     <div class="alert alert-light border">Nenhum arquivo complementar anexado a esta aula.
                                     </div>
@@ -542,7 +542,8 @@ $statusQuiz = verificarAprovacaoQuiz($conn, $aluno_id, $curso_id);
                                                     style="font-size: 0.75rem;"><?php echo date('d/m/Y H:i', strtotime($d['data_pergunta'])); ?></span>
                                             </div>
                                             <p class="mb-0 text-dark small">
-                                                <?php echo nl2br(htmlspecialchars($d['pergunta'])); ?></p>
+                                                <?php echo nl2br(htmlspecialchars($d['pergunta'])); ?>
+                                            </p>
 
                                             <?php if (!empty($d['resposta'])): ?>
                                                 <div class="card-resposta">
@@ -554,7 +555,8 @@ $statusQuiz = verificarAprovacaoQuiz($conn, $aluno_id, $curso_id);
                                                             style="font-size: 0.75rem;"><?php echo date('d/m/Y H:i', strtotime($d['data_resposta'])); ?></span>
                                                     </div>
                                                     <p class="mb-0 text-dark small">
-                                                        <?php echo nl2br(htmlspecialchars($d['resposta'])); ?></p>
+                                                        <?php echo nl2br(htmlspecialchars($d['resposta'])); ?>
+                                                    </p>
                                                 </div>
                                             <?php else: ?>
                                                 <div class="mt-2 text-warning small">
@@ -592,7 +594,8 @@ $statusQuiz = verificarAprovacaoQuiz($conn, $aluno_id, $curso_id);
                                     <?php foreach ($perguntasQuiz as $idx => $p): ?>
                                         <div class="card p-3 mb-3 border-0 bg-light rounded-3">
                                             <p class="fw-bold text-dark mb-2">
-                                                <?php echo ($idx + 1) . '. ' . htmlspecialchars($p['pergunta']); ?></p>
+                                                <?php echo ($idx + 1) . '. ' . htmlspecialchars($p['pergunta']); ?>
+                                            </p>
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="radio"
                                                     name="resp_<?php echo $p['id']; ?>" id="p_<?php echo $p['id']; ?>_a"
@@ -675,7 +678,8 @@ $statusQuiz = verificarAprovacaoQuiz($conn, $aluno_id, $curso_id);
                                 <?php endif; ?>
                                 <div class="flex-grow-1">
                                     <h6 class="fw-bold mb-0" style="font-size: 0.95rem;">
-                                        <?php echo ($idx + 1) . '. ' . htmlspecialchars($a['titulo']); ?></h6>
+                                        <?php echo ($idx + 1) . '. ' . htmlspecialchars($a['titulo']); ?>
+                                    </h6>
                                     <small class="text-muted"><?php echo $concluida ? 'Concluída' : 'Pendente'; ?></small>
                                 </div>
                             </a>

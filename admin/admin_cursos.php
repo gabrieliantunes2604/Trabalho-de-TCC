@@ -42,41 +42,69 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $caminho_imagem = $curso_atual['imagem'] ?? '';
     if (isset($_FILES['imagem']) && $_FILES['imagem']['error'] === UPLOAD_ERR_OK) {
         $up = uploadSeguro($_FILES['imagem'], '../uploads/', 'imagem');
-        if (!up['sucesso']) {
+        if (!$up['sucesso']) {
             die(htmlspecialchars($up['erro']));
         }
-        $caminho_imagem = $up['caminho'];
+        $caminho_imagem = ltrim(str_replace('../', '', $up['caminho']), '/');
         $nova_img_enviada = true;
     }
 
     // Upload do PDF
-    $caminho_pdf = $curso_atual['arquivo_pdf'] ?? '';
+    $novo_pdf_enviado = false;
     if (isset($_FILES['arquivo_pdf']) && $_FILES['arquivo_pdf']['error'] === UPLOAD_ERR_OK) {
-        $up = uploadSeguro($_FILES['arquivo_pdf'], '../uploads/', 'pdf');
-        if (!up['sucesso']) {
-            die(htmlspecialchars($up['erro']));
+        // Diretório físico no servidor onde o arquivo será salvo
+        $pasta_destino_fisica = __DIR__ . "/../uploads/pdfs/";
+
+        if (!is_dir($pasta_destino_fisica)) {
+            mkdir($pasta_destino_fisica, 0777, true);
         }
-        $caminho_pdf = $up['caminho'];
-        $nova_img_enviada = true;
-    }
 
+        $ext_pdf = strtolower(pathinfo($_FILES['arquivo_pdf']['name'], PATHINFO_EXTENSION));
 
-    // Upload da Planilha
-    $caminho_planilha = $curso_atual['arquivo_planilha'] ?? '';
-    if (isset($_FILES['arquivo_planilha']) && $_FILES['arquivo_planilha']['error'] === UPLOAD_ERR_OK) {
-        $pasta_planilha = "../uploads/planilhas/";
-        if (!is_dir($pasta_planilha)) mkdir($pasta_planilha, 0777, true);
-        $ext_planilha = strtolower(pathinfo($_FILES['arquivo_planilha']['name'], PATHINFO_EXTENSION));
-        if (in_array($ext_planilha, ['xls', 'xlsx'])) {
-            $novo_nome_planilha = "planilha_" . uniqid() . "." . $ext_planilha;
-            if (move_uploaded_file($_FILES['arquivo_planilha']['tmp_name'], $pasta_planilha . $novo_nome_planilha)) {
-                $caminho_planilha = $pasta_planilha . $novo_nome_planilha;
-                if ($curso_atual && !empty($curso_atual['arquivo_planilha']) && file_exists($curso_atual['arquivo_planilha'])) {
-                    @unlink($curso_atual['arquivo_planilha']);
+        if ($ext_pdf === 'pdf') {
+            $novo_nome_pdf = "material_" . uniqid() . ".pdf";
+            $caminho_completo = $pasta_destino_fisica . $novo_nome_pdf;
+
+            if (move_uploaded_file($_FILES['arquivo_pdf']['tmp_name'], $caminho_completo)) {
+                // Caminho padronizado salvo no Banco de Dados
+                $caminho_pdf = "uploads/pdfs/" . $novo_nome_pdf;
+                $novo_pdf_enviado = true;
+
+                // Remove o PDF antigo
+                if ($curso_atual && !empty($curso_atual['arquivo_pdf'])) {
+                    $pdf_antigo_fisico = __DIR__ . "/../" . ltrim($curso_atual['arquivo_pdf'], '../');
+                    if (file_exists($pdf_antigo_fisico)) {
+                        unlink($pdf_antigo_fisico);
+                    }
                 }
             }
         }
     }
+
+
+    // Upload da Planilha
+    if (isset($_FILES['arquivo_planilha']) && $_FILES['arquivo_planilha']['error'] === UPLOAD_ERR_OK) {
+        $pasta_planilha = "../uploads/planilhas/";
+        if (!is_dir($pasta_planilha))
+            mkdir($pasta_planilha, 0777, true);
+        $ext_planilha = strtolower(pathinfo($_FILES['arquivo_planilha']['name'], PATHINFO_EXTENSION));
+
+        // Verifica se é excel
+        if (in_array($ext_planilha, ['xls', 'xlsx'])) {
+            $novo_nome_planilha = "planilha_" . uniqid() . "." . $ext_planilha;
+            if (move_uploaded_file($_FILES['arquivo_planilha']['tmp_name'], $pasta_planilha . $novo_nome_planilha)) {
+                $caminho_planilha = $pasta_planilha . $novo_nome_planilha;
+                $nova_planilha_enviada = true;
+
+                // Remove a planilha antiga se existir ao editar
+                if ($curso_atual && !empty($curso_atual['arquivo_planilha']) && file_exists($curso_atual['arquivo_planilha'])) {
+                    unlink($curso_atual['arquivo_planilha']);
+                }
+            }
+        }
+    }
+
+
 
     // Operação no Banco (Insert ou Update)
     if ($id) {
@@ -93,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     arquivo_pdf = :arquivo_pdf,
                     arquivo_planilha = :arquivo_planilha
                 WHERE id = :id";
-        
+
         $stmt = $conn->prepare($sql);
         $stmt->bindParam(':id', $id);
     } else {
@@ -130,9 +158,12 @@ if (isset($_GET['deletar'])) {
     $curso = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($curso) {
-        if (!empty($curso['imagem']) && file_exists($curso['imagem'])) @unlink($curso['imagem']);
-        if (!empty($curso['arquivo_pdf']) && file_exists($curso['arquivo_pdf'])) @unlink($curso['arquivo_pdf']);
-        if (!empty($curso['arquivo_planilha']) && file_exists($curso['arquivo_planilha'])) @unlink($curso['arquivo_planilha']);
+        if (!empty($curso['imagem']) && file_exists($curso['imagem']))
+            @unlink($curso['imagem']);
+        if (!empty($curso['arquivo_pdf']) && file_exists($curso['arquivo_pdf']))
+            @unlink($curso['arquivo_pdf']);
+        if (!empty($curso['arquivo_planilha']) && file_exists($curso['arquivo_planilha']))
+            @unlink($curso['arquivo_planilha']);
 
         $stmt = $conn->prepare("DELETE FROM cursos WHERE id = :id");
         $stmt->bindParam(':id', $id);
@@ -270,8 +301,13 @@ if (isset($_GET['editar'])) {
             font-size: 0.9rem;
         }
 
-        .link-ver-site { color: #ffb800 !important; }
-        .link-sair { color: #ee5d50 !important; }
+        .link-ver-site {
+            color: #ffb800 !important;
+        }
+
+        .link-sair {
+            color: #ee5d50 !important;
+        }
 
         .main-content {
             margin-left: var(--sidebar-width);
@@ -308,7 +344,8 @@ if (isset($_GET['editar'])) {
                 </ul>
             </div>
             <div class="sidebar-footer">
-                <a href="../index.php" target="_blank" class="link-ver-site"><i class="bi bi-box-arrow-up-right"></i> Ver Site Público</a>
+                <a href="../index.php" target="_blank" class="link-ver-site"><i class="bi bi-box-arrow-up-right"></i>
+                    Ver Site Público</a>
                 <a href="../auth/logout.php" class="link-sair"><i class="bi bi-box-arrow-left"></i> Encerrar Sessão</a>
             </div>
         </aside>
@@ -319,7 +356,8 @@ if (isset($_GET['editar'])) {
                     <h2 class="fw-bold m-0 text-dark">Gestão de Cursos</h2>
                     <p class="text-muted small m-0">Gerencie todos os cursos da plataforma.</p>
                 </div>
-                <a href="admin.php" class="btn btn-outline-secondary bg-white shadow-sm fw-semibold">⬅ Voltar ao Dashboard</a>
+                <a href="admin.php" class="btn btn-outline-secondary bg-white shadow-sm fw-semibold">⬅ Voltar ao
+                    Dashboard</a>
             </div>
 
             <div class="card card-custom p-4">
@@ -333,12 +371,13 @@ if (isset($_GET['editar'])) {
                             <input type="text" name="titulo" class="form-control" required
                                 value="<?php echo $curso_edit ? htmlspecialchars($curso_edit['titulo']) : ''; ?>">
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Tipo de Conteúdo</label>
                             <select name="tipo_aula" class="form-select" required>
                                 <option value="video" <?php echo ($curso_edit && $curso_edit['tipo_aula'] == 'video') ? 'selected' : ''; ?>>Vídeo Aula</option>
-                                <option value="exercicio" <?php echo ($curso_edit && $curso_edit['tipo_aula'] == 'exercicio') ? 'selected' : ''; ?>>Exercício de Fixação / Prática</option>
+                                <option value="exercicio" <?php echo ($curso_edit && $curso_edit['tipo_aula'] == 'exercicio') ? 'selected' : ''; ?>>Exercício de Fixação /
+                                    Prática</option>
                                 <option value="leitura" <?php echo ($curso_edit && $curso_edit['tipo_aula'] == 'leitura') ? 'selected' : ''; ?>>Material de Leitura</option>
                             </select>
                         </div>
@@ -394,7 +433,8 @@ if (isset($_GET['editar'])) {
                             <label class="form-label fw-semibold text-dark">Capa do Curso (Imagem)</label>
                             <?php if ($curso_edit && !empty($curso_edit['imagem'])): ?>
                                 <div class="mb-2">
-                                    <img src="<?php echo htmlspecialchars($curso_edit['imagem']); ?>" alt="Capa Atual" style="height: 60px; border-radius: 6px;">
+                                    <img src="<?php echo htmlspecialchars($curso_edit['imagem']); ?>" alt="Capa Atual"
+                                        style="height: 60px; border-radius: 6px;">
                                 </div>
                             <?php endif; ?>
                             <input type="file" name="imagem" class="form-control" accept="image/*">
@@ -408,7 +448,8 @@ if (isset($_GET['editar'])) {
                             </div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="promocao" id="promocao" <?php echo ($curso_edit && $curso_edit['promocao'] == 1) ? 'checked' : ''; ?>>
-                                <label class="form-check-label text-danger fw-semibold" for="promocao">🔥 Colocar em Promoção</label>
+                                <label class="form-check-label text-danger fw-semibold" for="promocao">🔥 Colocar em
+                                    Promoção</label>
                             </div>
                         </div>
 
@@ -449,7 +490,8 @@ if (isset($_GET['editar'])) {
                                                 <img src="<?php echo htmlspecialchars($c['imagem']); ?>" alt="Capa"
                                                     style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">
                                             <?php else: ?>
-                                                <div style="width: 50px; height: 50px; background-color: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #6c757d;">
+                                                <div
+                                                    style="width: 50px; height: 50px; background-color: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #6c757d;">
                                                     Sem Capa
                                                 </div>
                                             <?php endif; ?>
@@ -463,13 +505,16 @@ if (isset($_GET['editar'])) {
                                                 <?php if ($c['promocao']): ?>
                                                     <span class="badge bg-danger">Promoção</span>
                                                 <?php endif; ?>
-                                                <span class="badge bg-secondary"><?php echo ucfirst($c['tipo_aula'] ?? 'Video'); ?></span>
+                                                <span
+                                                    class="badge bg-secondary"><?php echo ucfirst($c['tipo_aula'] ?? 'Video'); ?></span>
                                             </div>
                                         </td>
                                         <td>
-                                            <span class="text-success fw-bold d-block">R$ <?php echo number_format($c['preco'], 2, ',', '.'); ?></span>
+                                            <span class="text-success fw-bold d-block">R$
+                                                <?php echo number_format($c['preco'], 2, ',', '.'); ?></span>
                                             <?php if (!empty($c['preco_antigo']) && $c['preco_antigo'] > 0): ?>
-                                                <small class="text-muted text-decoration-line-through">R$ <?php echo number_format($c['preco_antigo'], 2, ',', '.'); ?></small>
+                                                <small class="text-muted text-decoration-line-through">R$
+                                                    <?php echo number_format($c['preco_antigo'], 2, ',', '.'); ?></small>
                                             <?php endif; ?>
                                         </td>
                                         <td>
@@ -484,8 +529,12 @@ if (isset($_GET['editar'])) {
                                             <?php endif; ?>
                                         </td>
                                         <td class="text-end">
-                                            <a href="admin_cursos.php?editar=<?php echo $c['id']; ?>" class="btn btn-sm btn-outline-primary">✏️ Editar</a>
-                                            <a href="admin_cursos.php?deletar=<?php echo $c['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Tem certeza que deseja apagar este curso permanentemente?');">🗑️ Apagar</a>
+                                            <a href="admin_cursos.php?editar=<?php echo $c['id']; ?>"
+                                                class="btn btn-sm btn-outline-primary">✏️ Editar</a>
+                                            <a href="admin_cursos.php?deletar=<?php echo $c['id']; ?>"
+                                                class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Tem certeza que deseja apagar este curso permanentemente?');">🗑️
+                                                Apagar</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -521,12 +570,12 @@ if (isset($_GET['editar'])) {
             });
         });
 
-        <?php 
-    if (file_exists(__DIR__ . '/../includes/footer.php')) {
-        include __DIR__ . '/../includes/footer.php'; 
-    }
-    ?>
-    
+        <?php
+        if (file_exists(__DIR__ . '/../includes/footer.php')) {
+            include __DIR__ . '/../includes/footer.php';
+        }
+        ?>
+
     </script>
 </body>
 

@@ -17,31 +17,41 @@ if ($tipo === 'admin') {
     garantirEstruturaAdmins($conn);
 }
 
-
+// Busca o ID e o E-mail do utilizador
 if ($tipo === 'admin') {
-    $stmt = $conn->prepare("SELECT id FROM admins WHERE email = :email OR usuario = :email LIMIT 1");
+    $stmt = $conn->prepare("SELECT id, email FROM admins WHERE email = :email OR usuario = :email LIMIT 1");
 } else {
-    $stmt = $conn->prepare("SELECT id FROM alunos WHERE email = :email");
+    $stmt = $conn->prepare("SELECT id, email FROM alunos WHERE email = :email LIMIT 1");
 }
 $stmt->execute(['email' => $email]);
 $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if ($usuario && !empty($usuario['email'])) {    // SELECT id, email
+// Define um link padrão caso o utilizador não exista
+$link = "esqueci_senha.php?tipo={$tipo}";
+
+if ($usuario && !empty($usuario['email'])) {
     $token = bin2hex(random_bytes(32));
     $tabela = $tipo === 'admin' ? 'admins' : 'alunos';
-    $conn->prepare("UPDATE $tabela SET token_recuperacao = :token, token_expiracao = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?")
-        ->execute(['hash'('sha256', $token), $usuario['id']]);
+    $tokenHash = hash('sha256', $token);
+
+    // Atualiza a tabela com o token
+    $stmtUpdate = $conn->prepare("UPDATE {$tabela} SET token_recuperacao = :token WHERE id = :id");
+    $stmtUpdate->execute([
+        'token' => $tokenHash,
+        'id' => $usuario['id']
+    ]);
+
+    // Monta o link real de redefinição
     $link = $base . $pasta . "/redefinir_senha.php?token=" . $token . "&tipo=" . $tipo;
+
     @mail($usuario['email'], "Recuperação de senha", "Acesse em até 30 min: $link");
 }
 
-    echo "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head><body class='bg-light d-flex align-items-center justify-content-center' style='height: 100vh;'>";
-    echo "<div class='card p-5 text-center shadow-sm' style='max-width: 500px; border-radius: 12px;'>";
-    echo "<h2 class='text-success fw-bold mb-3'>Tudo certo!</h2>";
-    echo "<p class='text-muted mb-4'>Em um sistema real, um e-mail seria enviado agora. No ambiente local, clique no botão abaixo:</p>";
-    echo "<a href='" . htmlspecialchars($link) . "' class='btn btn-success btn-lg fw-bold'>Simular clique no E-mail</a>";
-    echo "</div></body></html>";
-    exit;
-
-
-echo "<script>alert('Se este e-mail estiver cadastrado, um link foi enviado.'); window.location.href='esqueci_senha.php?tipo={$tipo}';</script>";
+// Apresenta o ecrã de simulação local
+echo "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head><body class='bg-light d-flex align-items-center justify-content-center' style='height: 100vh;'>";
+echo "<div class='card p-5 text-center shadow-sm' style='max-width: 500px; border-radius: 12px;'>";
+echo "<h2 class='text-success fw-bold mb-3'>Tudo certo!</h2>";
+echo "<p class='text-muted mb-4'>Em um sistema real, um e-mail seria enviado agora. No ambiente local, clique no botão abaixo:</p>";
+echo "<a href='" . htmlspecialchars($link) . "' class='btn btn-success btn-lg fw-bold'>Simular clique no E-mail</a>";
+echo "</div></body></html>";
+exit;
